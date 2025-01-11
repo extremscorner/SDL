@@ -25,8 +25,6 @@
 
 #include "SDL_main.h"
 
-#include "../../video/ogc/SDL_ogcevents_c.h"
-
 #ifdef main
 #undef main
 #endif
@@ -36,20 +34,11 @@
 
 /* OGC includes */
 #include <fat.h>
-#include <ogc/usbmouse.h>
 #include <ogcsys.h>
 #include <wiiuse/wpad.h>
 
-static void ShutdownCB()
-{
-    OGC_PowerOffRequested = true;
-}
-
-static void ResetCB(u32, void *)
-{
-    OGC_ResetRequested = true;
-}
-
+/* Do initialisation which has to be done first for the console to work */
+/* Entry point */
 int main(int argc, char *argv[])
 {
     u32 version;
@@ -62,24 +51,18 @@ int main(int argc, char *argv[])
     if (preferred > 0 && version != (u32)preferred)
         IOS_ReloadIOS(preferred);
 
-    // Wii Power/Reset buttons
     WPAD_Init();
-    WPAD_SetPowerButtonCallback((WPADShutdownCallback)ShutdownCB);
-    SYS_SetPowerCallback(ShutdownCB);
-    SYS_SetResetCallback(ResetCB);
-    // TODO OGC_InitVideoSystem();
     WPAD_SetDataFormat(WPAD_CHAN_ALL, WPAD_FMT_BTNS_ACC_IR);
     WPAD_SetVRes(WPAD_CHAN_ALL, 640, 480);
 
-    MOUSE_Init();
     fatInitDefault();
 
     /* Call the user's main function. Make sure that argv contains at least one
      * element. */
     if (!argv || argv[0] == NULL) {
-        static const char *dummy_argv[2] = { "app", NULL };
+        static const char *dummy_argv[2] = { "default.dol", NULL };
         argc = 1;
-        argv = (char**)dummy_argv;
+        argv = (char **)dummy_argv;
     }
     return SDL_main(argc, argv);
 }

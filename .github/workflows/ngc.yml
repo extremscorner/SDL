@@ -6,7 +6,7 @@ jobs:
   ngcn:
     runs-on: ubuntu-latest
     container:
-      image: devkitpro/devkitppc:latest
+      image: ghcr.io/extremscorner/libogc2:latest
     steps:
       - uses: actions/checkout@v4
       - name: Install build requirements
@@ -15,7 +15,7 @@ jobs:
           apt install ninja-build
       - name: Configure CMake
         run: |
-          /opt/devkitpro/portlibs/gamecube/bin/powerpc-eabi-cmake -S . -B build -G Ninja \
+          /opt/devkitpro/libogc2/gamecube/bin/powerpc-eabi-cmake -S . -B build -G Ninja \
           -DCMAKE_INSTALL_PREFIX=prefix
       - name: Build
         run: cmake --build build --verbose --parallel
@@ -26,14 +26,14 @@ jobs:
           ( cd prefix; find ) | LC_ALL=C sort -u
       - name: Verify CMake configuration files
         run: |
-          /opt/devkitpro/portlibs/gamecube/bin/powerpc-eabi-cmake -S cmake/test -B cmake_config_build -G Ninja \
+          /opt/devkitpro/libogc2/gamecube/bin/powerpc-eabi-cmake -S cmake/test -B cmake_config_build -G Ninja \
             -DTEST_SHARED=FALSE \
             -DCMAKE_PREFIX_PATH=${{ env.SDL2_DIR }} \
             -DCMAKE_BUILD_TYPE=Release
           cmake --build cmake_config_build --verbose
       - name: Extract CC/CXX/CFLAGS/CXXFLAGS from CMake toolchain
         run: |
-          /opt/devkitpro/portlibs/gamecube/bin/powerpc-eabi-cmake -S .github/cmake -B /tmp/cmake_extract \
+          /opt/devkitpro/libogc2/gamecube/bin/powerpc-eabi-cmake -S .github/cmake -B /tmp/cmake_extract \
             -DCMAKE_BUILD_TYPE=Release \
             -DVAR_PATH=/tmp/ngc_env.txt
           cat /tmp/ngc_env.txt >> $GITHUB_ENV

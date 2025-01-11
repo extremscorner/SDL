@@ -40,13 +40,16 @@
 /* Entry point */
 int main(int argc, char *argv[])
 {
-    //	SYS_SetPowerCallback(ShutdownCB);
-    //	SYS_SetResetCallback(ResetCB);
     fatInitDefault();
-    /* Temporarily while developing SDL */
-    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_DEBUG);
-    /* Call the user's main function */
-    return (SDL_main(argc, argv));
+
+    /* Call the user's main function. Make sure that argv contains at least one
+     * element. */
+    if (!argv || argv[0] == NULL) {
+        static const char *dummy_argv[2] = { "default.dol", NULL };
+        argc = 1;
+        argv = (char **)dummy_argv;
+    }
+    return SDL_main(argc, argv);
 }
 
 #endif /* __gamecube__ */

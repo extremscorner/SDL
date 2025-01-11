@@ -423,7 +423,7 @@ static const char *OGC_JoystickGetDeviceName(int device_index)
         return NULL;
 
     if (index >= GC_JOYSTICKS_START && index < GC_JOYSTICKS_END) {
-        sprintf(joy_name, "Gamecube %d", index);
+        sprintf(joy_name, "GameCube %d", index);
 #ifdef __wii__
     } else if (index >= WII_WIIMOTES_START && index < WII_WIIMOTES_END) {
         char *name_ptr = joy_name;

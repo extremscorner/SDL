@@ -1,81 +1,106 @@
 /*
-    SDL - Simple DirectMedia Layer
-    Copyright (C) 1997-2006 Sam Lantinga
+  Simple DirectMedia Layer
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-    Sam Lantinga
-    slouken@libsdl.org
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
 */
-#include "SDL_config.h"
+#include "../../SDL_internal.h"
 
-/* An implementation of mutexes using semaphores */
+#include <errno.h>
+#include <ogc/mutex.h>
 
 #include "SDL_thread.h"
-#include "SDL_systhread_c.h"
-
-#include <ogcsys.h>
 
 struct SDL_mutex
 {
-    u32 id;
+    mutex_t id;
 };
 
 /* Create a mutex */
 SDL_mutex *SDL_CreateMutex(void)
 {
-    SDL_mutex *mutex = NULL;
+    SDL_mutex *mutex;
 
-    /* Allocate mutex memory */
-    mutex = (SDL_mutex *) SDL_malloc(sizeof(*mutex));
-    if (mutex) {
-        LWP_MutexInit(&mutex->id, 1);
+    mutex = (SDL_mutex *)SDL_malloc(sizeof(SDL_mutex));
+    if (mutex != NULL) {
+        if (LWP_MutexInit(&mutex->id, true) != 0) {
+            SDL_SetError("LWP_MutexInit() failed");
+            SDL_free(mutex);
+            mutex = NULL;
+        }
     } else {
         SDL_OutOfMemory();
     }
     return mutex;
 }
 
-/* Free the mutex */
+/* Destroy a mutex */
 void SDL_DestroyMutex(SDL_mutex *mutex)
 {
-    if (mutex) {
+    if (mutex != NULL) {
         LWP_MutexDestroy(mutex->id);
         SDL_free(mutex);
     }
 }
 
-/* Lock the semaphore */
-int SDL_mutexP(SDL_mutex *mutex)
+/* Lock the mutex */
+int SDL_LockMutex(SDL_mutex *mutex) SDL_NO_THREAD_SAFETY_ANALYSIS /* clang doesn't know about NULL mutexes */
 {
     if (mutex == NULL) {
-        SDL_SetError("Passed a NULL mutex");
-        return -1;
+        return 0;
     }
 
-    return LWP_MutexLock(mutex->id);
+    if (LWP_MutexLock(mutex->id) != 0) {
+        return SDL_SetError("LWP_MutexLock() failed");
+    }
+    return 0;
+}
+
+/* try Lock the mutex */
+int SDL_TryLockMutex(SDL_mutex *mutex)
+{
+    int retval;
+
+    if (mutex == NULL) {
+        return 0;
+    }
+
+    retval = LWP_MutexTryLock(mutex->id);
+    if (retval != 0) {
+        if (retval == EBUSY) {
+            retval = SDL_MUTEX_TIMEDOUT;
+        } else {
+            retval = SDL_SetError("LWP_MutexTryLock() failed");
+        }
+    }
+    return retval;
 }
 
 /* Unlock the mutex */
-int SDL_mutexV(SDL_mutex *mutex)
+int SDL_UnlockMutex(SDL_mutex *mutex) SDL_NO_THREAD_SAFETY_ANALYSIS /* clang doesn't know about NULL mutexes */
 {
     if (mutex == NULL) {
-        SDL_SetError("Passed a NULL mutex");
-        return -1;
+        return 0;
     }
 
-    return LWP_MutexUnlock(mutex->id);
-
+    if (LWP_MutexUnlock(mutex->id) != 0) {
+        return SDL_SetError("LWP_MutexUnlock() failed");
+    }
+    return 0;
 }
+
+/* vi: set ts=4 sw=4 expandtab: */

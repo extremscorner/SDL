@@ -161,25 +161,27 @@ static void setup_video_mode(_THIS, GXRModeObj *vmode)
     VIDEO_SetBlack(true);
     VIDEO_Configure(vmode);
 
+    videodata->vmode = vmode;
+
     /* Allocate the XFB */
-    videodata->xfb[0] = MEM_K0_TO_K1(SYS_AllocateFramebuffer(vmode));
-    videodata->xfb[1] = MEM_K0_TO_K1(SYS_AllocateFramebuffer(vmode));
+    videodata->xfb[0] = SYS_AllocateFramebuffer(vmode);
+    videodata->xfb[1] = SYS_AllocateFramebuffer(vmode);
 
     VIDEO_ClearFrameBuffer(vmode, videodata->xfb[0], COLOR_BLACK);
     VIDEO_SetNextFramebuffer(videodata->xfb[0]);
     VIDEO_SetBlack(false);
     VIDEO_Flush();
 
-    VIDEO_WaitVSync();
-    if (vmode->viTVMode & VI_NON_INTERLACE) VIDEO_WaitVSync();
+    VIDEO_WaitForFlush();
 
     /* Setup the EFB -> XFB copy operation */
+    GX_SetDispCopyFrame2Field(vmode->copy_interlaced);
     GX_SetDispCopySrc(0, 0, vmode->fbWidth, vmode->efbHeight);
+    GX_SetDispCopyYScale(GX_GetYScaleFactor(vmode->efbHeight, vmode->xfbHeight));
     GX_SetDispCopyDst(vmode->fbWidth, vmode->xfbHeight);
-    GX_SetDispCopyYScale((f32)vmode->xfbHeight / (f32)vmode->efbHeight);
-    GX_SetCopyFilter(vmode->aa, vmode->sample_pattern, GX_FALSE, vmode->vfilter);
+    GX_SetCopyFilter(vmode->aa, vmode->sample_pattern, GX_TRUE, vmode->vfilter);
     GX_SetFieldMode(vmode->field_rendering,
-                    ((vmode->viHeight == 2 * vmode->xfbHeight) ? GX_ENABLE : GX_DISABLE));
+                    ((vmode->viHeight / vmode->efbHeight == 2) ? GX_ENABLE : GX_DISABLE));
 
     OGC_draw_init(vmode->fbWidth, vmode->efbHeight);
 }
@@ -191,10 +193,8 @@ static int OGC_SetDisplayMode(_THIS, SDL_VideoDisplay *display,
     /* The GX video mode is stored in the driverdata pointer */
     GXRModeObj *vmode = mode->driverdata;
 
-    if (videodata->xfb[0])
-        free(MEM_K1_TO_K0(videodata->xfb[0]));
-    if (videodata->xfb[1])
-        free(MEM_K1_TO_K0(videodata->xfb[1]));
+    free(videodata->xfb[0]);
+    free(videodata->xfb[1]);
 
     setup_video_mode(_this, vmode);
     return 0;
@@ -312,8 +312,6 @@ int OGC_VideoInit(_THIS)
     SDL_AddDisplayMode(&_this->displays[0], &mode);
     add_supported_modes(&_this->displays[0], VI_FORMAT_FROM_MODE(vmode->viTVMode));
 
-    videodata->vmode = vmode;
-
 #ifdef __wii__
     OGC_InitMouse(_this);
     /* OGC_PumpEvents reads the keyboard, so we need to initialize it here */
@@ -331,11 +329,9 @@ void OGC_VideoQuit(_THIS)
     OGC_QuitMouse(_this);
 #endif
 
-    SDL_free(videodata->gp_fifo);
-    if (videodata->xfb[0])
-        free(MEM_K1_TO_K0(videodata->xfb[0]));
-    if (videodata->xfb[1])
-        free(MEM_K1_TO_K0(videodata->xfb[1]));
+    free(videodata->gp_fifo);
+    free(videodata->xfb[0]);
+    free(videodata->xfb[1]);
 
     /* During shutdown, SDL_ResetDisplayModes() will be called and will invoke
      * SDL_free() on driverdata. Nullify the pointers in order to avoid a
@@ -356,6 +352,7 @@ void *OGC_video_get_xfb(_THIS)
 void OGC_video_flip(_THIS, bool vsync)
 {
     SDL_VideoData *videodata = _this->driverdata;
+    GXRModeObj *vmode = videodata->vmode;
     void *xfb = OGC_video_get_xfb(_this);
 
     if (_this->gl_config.driver_loaded &&
@@ -365,9 +362,9 @@ void OGC_video_flip(_THIS, bool vsync)
     OGC_draw_cursor(_this);
     OGC_restore_viewport(_this);
 #endif
+    GX_SetCopyFilter(vmode->aa, vmode->sample_pattern, GX_TRUE, vmode->vfilter);
     GX_CopyDisp(xfb, GX_FALSE);
     GX_DrawDone();
-    GX_Flush();
 
     VIDEO_SetNextFramebuffer(xfb);
     VIDEO_Flush();

@@ -104,9 +104,9 @@ static SDL_INLINE void contextUnlock(_THIS)
     LWP_MutexUnlock(this->hidden->lock);
 }
 
-static void audio_frame_finished(AESNDPB *pb, u32 state, void *arg)
+static void audio_frame_finished(AESNDPB *pb, u32 state)
 {
-    SDL_AudioDevice *this = (SDL_AudioDevice *)arg;
+    SDL_AudioDevice *this = (SDL_AudioDevice *)AESND_GetVoiceUserData(pb);
 
     if (state == VOICE_STATE_STREAM) {
         const size_t buffer_size = DMA_BUFFER_SIZE;
@@ -151,7 +151,7 @@ static int OGCAUDIO_OpenDevice(_THIS, const char *devname)
     this->hidden = hidden;
 
     AESND_Init();
-    AESND_Pause(1);
+    AESND_Pause(true);
 
     /* Initialise internal state */
     LWP_MutexInit(&hidden->lock, false);
@@ -178,17 +178,18 @@ static int OGCAUDIO_OpenDevice(_THIS, const char *devname)
     /* Update the fragment size as size in bytes */
     SDL_CalculateAudioSpec(&this->spec);
 
-    hidden->voice = AESND_AllocateVoiceWithArg(audio_frame_finished, this);
+    hidden->voice = AESND_AllocateVoice(audio_frame_finished);
     if (hidden->voice == NULL)
         return -1;
 
     // start audio
+    AESND_SetVoiceUserData(hidden->voice, this);
     AESND_SetVoiceFormat(hidden->voice, hidden->format);
     AESND_SetVoiceFrequency(hidden->voice, this->spec.freq);
     AESND_SetVoiceBuffer(hidden->voice, hidden->dma_buffers[0], DMA_BUFFER_SIZE);
     AESND_SetVoiceStream(hidden->voice, true);
-    AESND_SetVoiceStop(hidden->voice, 0);
-    AESND_Pause(0);
+    AESND_SetVoiceStop(hidden->voice, false);
+    AESND_Pause(false);
 
     return 0;
 }
@@ -235,13 +236,8 @@ static void OGCAUDIO_CloseDevice(_THIS)
         hidden->voice = NULL;
     }
 
-    AESND_Pause(1);
+    AESND_Pause(true);
     FreePrivateData(this);
-}
-
-static void OGCAUDIO_ThreadInit(_THIS)
-{
-    LWP_SetThreadPriority(LWP_THREAD_NULL, 80);
 }
 
 static SDL_bool OGCAUDIO_Init(SDL_AudioDriverImpl *impl)
@@ -252,7 +248,6 @@ static SDL_bool OGCAUDIO_Init(SDL_AudioDriverImpl *impl)
     impl->WaitDevice = OGCAUDIO_WaitDevice;
     impl->GetDeviceBuf = OGCAUDIO_GetDeviceBuf;
     impl->CloseDevice = OGCAUDIO_CloseDevice;
-    impl->ThreadInit = OGCAUDIO_ThreadInit;
     impl->OnlyHasDefaultOutputDevice = SDL_TRUE;
 
     return SDL_TRUE; /* this audio target is available. */

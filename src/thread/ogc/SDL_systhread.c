@@ -1,71 +1,55 @@
 /*
-    SDL - Simple DirectMedia Layer
-    Copyright (C) 1997-2006 Sam Lantinga
+  Simple DirectMedia Layer
+  Copyright (C) 1997-2023 Sam Lantinga <slouken@libsdl.org>
 
-    This library is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
 
-    This library is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-    Sam Lantinga
-    slouken@libsdl.org
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
 */
-#include "SDL_config.h"
+#include "../../SDL_internal.h"
 
-/* Thread management routines for SDL */
+#include <ogc/lwp.h>
 
 #include "SDL_thread.h"
-#include "../SDL_systhread.h"
 #include "../SDL_thread_c.h"
+#include "../SDL_systhread.h"
 
-#include <ogcsys.h>
-
-void *run_thread(void *data)
+static void *RunThread(void *data)
 {
-    SDL_RunThread(data);
-    return (void *) 0; /* Prevent compiler warning */
+    SDL_RunThread((SDL_Thread *)data);
+    return NULL;
 }
 
 int SDL_SYS_CreateThread(SDL_Thread *thread)
 {
-    if (LWP_CreateThread(&thread->handle, run_thread,
-                         thread, 0, 0, 64) != 0 ) {
-        SDL_SetError("Not enough resources to create thread");
-        return -1;
+    int priority = LWP_GetThreadPriority(LWP_THREAD_NULL);
+
+    if (thread->stacksize == 0) {
+        thread->stacksize = LWP_GetThreadStackSize(LWP_THREAD_NULL);
     }
 
+    /* Create the thread and go! */
+    if (LWP_CreateThread(&thread->handle, RunThread, thread, NULL, thread->stacksize, priority) != 0) {
+        return SDL_SetError("Not enough resources to create thread");
+    }
     return 0;
 }
 
 void SDL_SYS_SetupThread(const char *name)
 {
-}
-
-int SDL_SYS_SetThreadPriority(SDL_ThreadPriority priority)
-{
-    u8 value;
-
-    /* Range is 0 (lowest) to 127 (highest) */
-    if (priority == SDL_THREAD_PRIORITY_LOW) {
-        value = 0;
-    } else if (priority == SDL_THREAD_PRIORITY_HIGH) {
-        value = 80;
-    } else if (priority == SDL_THREAD_PRIORITY_TIME_CRITICAL) {
-        value = 127;
-    } else {
-        value = 64;
-    }
-    LWP_SetThreadPriority(LWP_THREAD_NULL, value);
-    return 0;
+    return;
 }
 
 SDL_threadID SDL_ThreadID(void)
@@ -73,20 +57,34 @@ SDL_threadID SDL_ThreadID(void)
     return (SDL_threadID)LWP_GetSelf();
 }
 
+int SDL_SYS_SetThreadPriority(SDL_ThreadPriority priority)
+{
+    int value;
+
+    /* Range is 1 (lowest) to 127 (highest) */
+    if (priority == SDL_THREAD_PRIORITY_LOW) {
+        value = LWP_PRIO_LOWEST;
+    } else if (priority == SDL_THREAD_PRIORITY_HIGH) {
+        value = LWP_PRIO_HIGHEST;
+    } else if (priority == SDL_THREAD_PRIORITY_TIME_CRITICAL) {
+        value = LWP_PRIO_TIME_CRITICAL;
+    } else {
+        value = LWP_PRIO_NORMAL;
+    }
+    if (LWP_SetThreadPriority(LWP_THREAD_NULL, value) < 0) {
+        return SDL_SetError("LWP_SetThreadPriority() failed");
+    }
+    return 0;
+}
+
 void SDL_SYS_WaitThread(SDL_Thread *thread)
 {
-    void *v;
-    LWP_JoinThread(thread->handle, &v);
-    return;
+    LWP_JoinThread(thread->handle, NULL);
 }
 
 void SDL_SYS_DetachThread(SDL_Thread *thread)
 {
-    /* Do nothing. */
-    thread->handle = LWP_THREAD_NULL;
+    LWP_DetachThread(thread->handle);
 }
 
-void SDL_SYS_KillThread(SDL_Thread *thread)
-{
-    return;
-}
+/* vi: set ts=4 sw=4 expandtab: */

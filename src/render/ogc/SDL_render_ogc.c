@@ -261,7 +261,7 @@ static SDL_Texture *create_efb_texture(OGC_RenderData *data, SDL_Window *window)
     return texture;
 
 fail_texels_alloc:
-    SDL_free(ogc_tex->texels);
+    SDL_free(ogc_tex);
 fail_ogc_tex_alloc:
     SDL_free(texture);
 fail_texture_alloc:

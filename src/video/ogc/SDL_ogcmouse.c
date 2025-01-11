@@ -37,7 +37,7 @@
 #include <malloc.h>
 #include <ogc/cache.h>
 #include <ogc/gx.h>
-#include <ogc/lwp_watchdog.h>
+#include <ogc/timesupp.h>
 #include <opengx.h>
 #include <wiiuse/wpad.h>
 
@@ -298,8 +298,9 @@ void OGC_draw_cursor(_THIS)
                 s_cursor_background.maxside = side;
             }
             DCInvalidateRange(s_cursor_background.texels, texture_size);
+            GX_SetCopyFilter(GX_FALSE, NULL, GX_FALSE, NULL);
             GX_SetTexCopySrc(x, y, w, h);
-            GX_SetTexCopyDst(w, h, GX_TF_RGBA8, GX_FALSE);
+            GX_SetTexCopyDst(w, h, GX_TF_RGBA8, GX_COPY_PROGRESSIVE);
             GX_CopyTex(s_cursor_background.texels, GX_FALSE);
             s_cursor_background.x = x;
             s_cursor_background.y = y;
@@ -383,7 +384,7 @@ bool OGC_prep_draw_cursor(_THIS)
     }
 
     /* Avoid drawing too often. 30 FPS should be enough */
-    current_time_ms = gettime() / TB_TIMER_CLOCK;
+    current_time_ms = SYS_GetSystemTime() / TB_TIMER_CLOCK;
     elapsed_ms = current_time_ms - last_draw_ms;
     if (elapsed_ms < 33) return false;
 

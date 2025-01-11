@@ -34,10 +34,6 @@
 #include <ogc/system.h>
 #include <wiiuse/wpad.h>
 
-/* These variables can be set from the handlers registered in SDL_main() */
-bool OGC_PowerOffRequested = false;
-bool OGC_ResetRequested = false;
-
 #ifdef __wii__
 #define MAX_WII_MOUSE_BUTTONS 2
 static const struct {
@@ -93,13 +89,10 @@ static void pump_ir_events(_THIS)
 
 void OGC_PumpEvents(_THIS)
 {
-    if (OGC_ResetRequested || OGC_PowerOffRequested) {
+    if (!SYS_MainLoop()) {
         SDL_Event ev;
         ev.type = SDL_QUIT;
         SDL_PushEvent(&ev);
-        if (OGC_PowerOffRequested) {
-            SYS_ResetSystem(SYS_POWEROFF, 0, 0);
-        }
     }
 
 #ifdef __wii__
