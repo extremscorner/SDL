@@ -552,7 +552,7 @@ int SDL_SYS_JoystickInit(void)
 #endif
 }
 
-static char joy_name[64] = "Gamecube 0";
+static char joy_name[64] = "GameCube 0";
 
 /* Function to get the device-dependent name of a joystick */
 const char *SDL_SYS_JoystickName(int index)
@@ -598,7 +598,7 @@ const char *SDL_SYS_JoystickName(int index)
 			}
 		} else if((__jspad_enabled) && (index < (num_wii_joysticks + __numgcjoysticks)))
 #endif
-			sprintf(joy_name, "Gamecube %d", index);
+			sprintf(joy_name, "GameCube %d", index);
 	}
 	return (const char *)joy_name;
 }

@@ -23,7 +23,7 @@
 
 #ifdef SDL_TIMER_OGC
 
-#include <ogc/lwp_watchdog.h>
+#include <ogc/timesupp.h>
 #include <ogc/video.h>
 
 #include "SDL_timer.h"
@@ -35,24 +35,22 @@ static Uint64 start;
 
 void SDL_StartTicks(void)
 {
-	start = gettime();
+	start = SYS_GetSystemTime();
 }
 
 Uint32 SDL_GetTicks (void)
 {
-	const Uint64 ticks	= gettime() - start;
+	const Uint64 ticks	= SYS_GetSystemTime() - start;
 	const Uint64 ms		= ticks / TB_TIMER_CLOCK;
 	return ms;
 }
 
 void SDL_Delay (Uint32 ms)
 {
-	struct timespec elapsed, tv;
-	elapsed.tv_sec = ms/1000;
-	elapsed.tv_nsec = (ms%1000)*1000000;
-	tv.tv_sec = elapsed.tv_sec;
-	tv.tv_nsec = elapsed.tv_nsec;
-	nanosleep(&tv, &elapsed);
+	struct timespec tv;
+	tv.tv_sec = ms / TB_MSPERSEC;
+	tv.tv_nsec = (ms % TB_MSPERSEC) * TB_NSPERMS;
+	nanosleep(&tv, NULL);
 }
 
 #include "SDL_thread.h"

@@ -132,20 +132,19 @@ void OGC_AudioStop(ogcAudio *private)
 	}
 
 	if (private->voice) {
-		AESND_SetVoiceStop(private->voice, 1);
+		AESND_SetVoiceStop(private->voice, true);
 		AESND_FreeVoice(private->voice);
 		private->voice = NULL;
 	}
 
 	private->stopaudio = true;
 	if (athread != LWP_THREAD_NULL) {
-		LWP_ResumeThread(athread);
+		LWP_ContinueThread(athread);
 		LWP_JoinThread(athread, NULL);
 		athread = LWP_THREAD_NULL;
 	}
 
-	AESND_Pause(1);
-	// this function is broken
+	AESND_Pause(true);
 	//AESND_Reset();
 }
 
@@ -163,7 +162,7 @@ int OGC_AudioStart(ogcAudio *private)
 	if (private->voice==NULL)
 		return -1;
 
-	if (LWP_CreateThread(&athread, (void*(*)(void*))AudioThread, private, private->astack, AUDIOSTACK, 80) < 0) {
+	if (LWP_CreateThread(&athread, (void*(*)(void*))AudioThread, private, private->astack, AUDIOSTACK, LWP_PRIO_TIME_CRITICAL) != 0) {
 		AESND_FreeVoice(private->voice);
 		private->voice = NULL;
 		return -1;
@@ -175,8 +174,8 @@ int OGC_AudioStart(ogcAudio *private)
 	AESND_SetVoiceFrequency(private->voice, private->freq);
 	AESND_SetVoiceBuffer(private->voice, private->dma_buffers[0], DMA_BUFFER_SIZE);
 	AESND_SetVoiceStream(private->voice, true);
-	AESND_SetVoiceStop(private->voice, 0);
-	AESND_Pause(0);
+	AESND_SetVoiceStop(private->voice, false);
+	AESND_Pause(false);
 
 	current = private;
 	return 1;
@@ -269,7 +268,7 @@ static SDL_AudioDevice *OGCAUD_CreateDevice(int devindex)
 
 	// Initialise the ogc side of the audio system
 	AESND_Init();
-	AESND_Pause(1);
+	AESND_Pause(true);
 
 	/* Set the function pointers */
 	this->OpenAudio = OGCAUD_OpenAudio;

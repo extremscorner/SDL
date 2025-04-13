@@ -1,6 +1,6 @@
 /*
     SDL - Simple DirectMedia Layer
-    Copyright (C) 1997-2006 Sam Lantinga
+    Copyright (C) 1997-2012 Sam Lantinga
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -21,40 +21,28 @@
 */
 #include "SDL_config.h"
 
-/* Thread management routines for SDL */
+#include <ogc/lwp.h>
 
 #include "SDL_thread.h"
-#include "../SDL_systhread.h"
 #include "../SDL_thread_c.h"
+#include "../SDL_systhread.h"
 
-#include <ogcsys.h>
-
-/*
-struct SDL_Thread {
-	Uint32 threadid;
-	SYS_ThreadHandle handle;
-	int status;
-	SDL_error errbuf;
-	void *data;
-};
-
- */
-
-void *run_thread(void *data)
+static void *RunThread(void *data)
 {
 	SDL_RunThread(data);
-	return ((void *) 0); /* Prevent compiler warning */
+	return(NULL);
 }
 
 int SDL_SYS_CreateThread(SDL_Thread *thread, void *args)
 {
-	
-	if ( LWP_CreateThread(&thread->handle, run_thread, args, 0, 0, 16) != 0 ) {
+	size_t stacksize = LWP_GetThreadStackSize(LWP_THREAD_NULL);
+
+	/* Create the thread and go! */
+	if ( LWP_CreateThread(&thread->handle, RunThread, args, NULL, stacksize, LWP_PRIO_NORMAL) != 0 ) {
 		SDL_SetError("Not enough resources to create thread");
 		return(-1);
 	}
-	
-	return (0);
+	return(0);
 }
 
 void SDL_SYS_SetupThread(void)
@@ -64,14 +52,12 @@ void SDL_SYS_SetupThread(void)
 
 Uint32 SDL_ThreadID(void)
 {
-	return (Uint32) LWP_GetSelf();
+	return((Uint32)LWP_GetSelf());
 }
 
 void SDL_SYS_WaitThread(SDL_Thread *thread)
 {
-	void *v;
-	LWP_JoinThread(thread->handle, &v);
-	return;
+	LWP_JoinThread(thread->handle, NULL);
 }
 
 void SDL_SYS_KillThread(SDL_Thread *thread)

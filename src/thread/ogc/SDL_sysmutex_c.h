@@ -1,6 +1,6 @@
 /*
     SDL - Simple DirectMedia Layer
-    Copyright (C) 1997-2006 Sam Lantinga
+    Copyright (C) 1997-2012 Sam Lantinga
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,11 @@
 */
 #include "SDL_config.h"
 
+#ifndef _SDL_mutex_c_h
+#define _SDL_mutex_c_h
+
 struct SDL_mutex {
-	Uint32 id;
+	mutex_t id;
 };
+
+#endif /* _SDL_mutex_c_h */

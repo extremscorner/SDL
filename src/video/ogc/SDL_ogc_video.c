@@ -251,18 +251,18 @@ static void
 SetupGX()
 {
 	Mtx44 p;
-	int df = 1; // deflicker on/off
 
 	GX_SetCurrentGXThread();
 	GX_SetViewport (0, 0, vmode->fbWidth, vmode->efbHeight, 0, 1);
-	GX_SetDispCopyYScale ((f32) vmode->xfbHeight / (f32) vmode->efbHeight);
 	GX_SetScissor (0, 0, vmode->fbWidth, vmode->efbHeight);
 
+	GX_SetDispCopyFrame2Field(vmode->copy_interlaced);
 	GX_SetDispCopySrc(0, 0, vmode->fbWidth, vmode->efbHeight);
+	GX_SetDispCopyYScale(GX_GetYScaleFactor(vmode->efbHeight, vmode->xfbHeight));
 	GX_SetDispCopyDst(vmode->fbWidth, vmode->xfbHeight);
-	GX_SetCopyFilter (vmode->aa, vmode->sample_pattern, (df == 1) ? GX_TRUE : GX_FALSE, vmode->vfilter);
+	GX_SetCopyFilter (vmode->aa, vmode->sample_pattern, GX_TRUE, vmode->vfilter);
 
-	GX_SetFieldMode (vmode->field_rendering, ((vmode->viHeight == 2 * vmode->xfbHeight) ? GX_ENABLE : GX_DISABLE));
+	GX_SetFieldMode (vmode->field_rendering, ((vmode->viHeight / vmode->efbHeight == 2) ? GX_ENABLE : GX_DISABLE));
 	GX_SetPixelFmt (GX_PF_RGB8_Z24, GX_ZC_LINEAR);
 	GX_SetDispCopyGamma (GX_GM_1_0);
 	GX_SetCullMode (GX_CULL_NONE);
@@ -726,7 +726,7 @@ static void OGC_VideoQuit(_THIS)
 
 	current = NULL;
 
-	VIDEO_SetBlack(TRUE);
+	VIDEO_SetBlack(true);
 	VIDEO_Flush();
 
 	free(this->hidden->buffer);
@@ -859,24 +859,21 @@ OGC_InitVideoSystem()
 	vmode = VIDEO_GetPreferredMode(NULL);
 
 	/* Set up the video system with the chosen mode */
-	if (vmode == &TVPal528IntDf)
-		vmode = &TVPal576IntDfScale;
-
 	VIDEO_Configure(vmode);
 
 	// Allocate the video buffer
-	if (xfb) free(MEM_K1_TO_K0(xfb));
-	xfb = (unsigned char*) MEM_K0_TO_K1(SYS_AllocateFramebuffer(vmode));
+	free(xfb);
+	xfb = (unsigned char *) SYS_AllocateFramebuffer(vmode);
 
 	VIDEO_ClearFrameBuffer(vmode, xfb, COLOR_BLACK);
 	VIDEO_SetNextFramebuffer(xfb);
 
 	// Show the screen.
-	VIDEO_SetBlack(FALSE);
+	VIDEO_SetBlack(false);
 	VIDEO_Flush();
-	VIDEO_WaitVSync(); VIDEO_WaitVSync();
+	VIDEO_WaitForFlush();
 
-	//CON_Init(xfb,20,20,vmode->fbWidth,vmode->xfbHeight,vmode->fbWidth*VI_DISPLAY_PIX_SZ);
+	//CON_Init(xfb,0,0,vmode->fbWidth,vmode->xfbHeight,vmode->fbWidth*VI_DISPLAY_PIX_SZ);
 
 	/*** Clear out FIFO area ***/
 	memset(&gp_fifo, 0, DEFAULT_FIFO_SIZE);
@@ -908,8 +905,7 @@ void OGC_SetWidescreen(int wide)
 		VIDEO_ClearFrameBuffer(vmode, xfb, COLOR_BLACK);
 
 	VIDEO_Flush();
-
-	VIDEO_WaitVSync(); VIDEO_WaitVSync();
+	VIDEO_WaitForFlush();
 }
 
 void OGC_ChangeSquare(int xscale, int yscale, int xshift, int yshift)

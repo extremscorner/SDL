@@ -1,6 +1,6 @@
 /*
     SDL - Simple DirectMedia Layer
-    Copyright (C) 1997-2006 Sam Lantinga
+    Copyright (C) 1997-2012 Sam Lantinga
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -21,64 +21,39 @@
 */
 #include "SDL_config.h"
 
-/* An implementation of semaphores using mutexes and condition variables */
+#include <errno.h>
+#include <ogc/semaphore.h>
+#include <ogc/timesupp.h>
 
-#include "SDL_timer.h"
 #include "SDL_thread.h"
-#include "SDL_systhread_c.h"
 
-struct SDL_semaphore
-{
-	Uint32 count;
-	Uint32 waiters_count;
-	SDL_mutex *count_lock;
-	SDL_cond *count_nonzero;
+struct SDL_semaphore {
+	sem_t sem;
 };
 
+/* Create a semaphore, initialized with value */
 SDL_sem *SDL_CreateSemaphore(Uint32 initial_value)
 {
 	SDL_sem *sem;
 
-	sem = (SDL_sem *) SDL_malloc(sizeof(*sem));
-	if (!sem)
-	{
+	sem = (SDL_sem *) SDL_malloc(sizeof(SDL_sem));
+	if ( sem ) {
+		if ( LWP_SemInit(&sem->sem, initial_value, 0xFFFFFFFF) != 0 ) {
+			SDL_SetError("LWP_SemInit() failed");
+			SDL_free(sem);
+			sem = NULL;
+		}
+	} else {
 		SDL_OutOfMemory();
-		return NULL;
 	}
-	sem->count = initial_value;
-	sem->waiters_count = 0;
-
-	sem->count_lock = SDL_CreateMutex();
-	sem->count_nonzero = SDL_CreateCond();
-	if (!sem->count_lock || !sem->count_nonzero)
-	{
-		SDL_DestroySemaphore(sem);
-		return NULL;
-	}
-
-	return sem;
+	return(sem);
 }
 
-/* WARNING:
- You cannot call this function when another thread is using the semaphore.
- */
+/* Destroy a semaphore */
 void SDL_DestroySemaphore(SDL_sem *sem)
 {
-	if (sem)
-	{
-		sem->count = 0xFFFFFFFF;
-		while (sem->waiters_count > 0)
-		{
-			SDL_CondSignal(sem->count_nonzero);
-			SDL_Delay(10);
-		}
-		SDL_DestroyCond(sem->count_nonzero);
-		if (sem->count_lock)
-		{
-			SDL_mutexP(sem->count_lock);
-			SDL_mutexV(sem->count_lock);
-			SDL_DestroyMutex(sem->count_lock);
-		}
+	if ( sem ) {
+		LWP_SemDestroy(sem->sem);
 		SDL_free(sem);
 	}
 }
@@ -87,89 +62,97 @@ int SDL_SemTryWait(SDL_sem *sem)
 {
 	int retval;
 
-	if (!sem)
-	{
+	if ( ! sem ) {
 		SDL_SetError("Passed a NULL semaphore");
 		return -1;
 	}
 
-	retval = SDL_MUTEX_TIMEDOUT;
-	SDL_LockMutex(sem->count_lock);
-	if (sem->count > 0)
-	{
-		--sem->count;
-		retval = 0;
-	}
-	SDL_UnlockMutex(sem->count_lock);
-
-	return retval;
-}
-
-int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 timeout)
-{
-	int retval;
-
-	if (!sem)
-	{
-		SDL_SetError("Passed a NULL semaphore");
-		return -1;
-	}
-
-	/* A timeout of 0 is an easy case */
-	if (timeout == 0)
-	{
-		return SDL_SemTryWait(sem);
-	}
-
-	SDL_LockMutex(sem->count_lock);
-	++sem->waiters_count;
 	retval = 0;
-	while ((sem->count == 0) && (retval != SDL_MUTEX_TIMEDOUT))
-	{
-		retval = SDL_CondWaitTimeout(sem->count_nonzero, sem->count_lock,
-				timeout);
+	if ( LWP_SemTryWait(sem->sem) != 0 ) {
+		retval = SDL_MUTEX_TIMEDOUT;
 	}
-	--sem->waiters_count;
-	--sem->count;
-	SDL_UnlockMutex(sem->count_lock);
-
 	return retval;
 }
 
 int SDL_SemWait(SDL_sem *sem)
 {
-	return SDL_SemWaitTimeout(sem, SDL_MUTEX_MAXWAIT);
+	int retval;
+
+	if ( ! sem ) {
+		SDL_SetError("Passed a NULL semaphore");
+		return -1;
+	}
+
+	retval = 0;
+	if ( LWP_SemWait(sem->sem) != 0 ) {
+		SDL_SetError("LWP_SemWait() failed");
+		retval = -1;
+	}
+	return retval;
 }
 
+int SDL_SemWaitTimeout(SDL_sem *sem, Uint32 ms)
+{
+	int retval;
+	struct timespec tv;
+
+	if ( ! sem ) {
+		SDL_SetError("Passed a NULL semaphore");
+		return -1;
+	}
+
+	/* Try the easy cases first */
+	if ( ms == 0 ) {
+		return SDL_SemTryWait(sem);
+	}
+	if ( ms == SDL_MUTEX_MAXWAIT ) {
+		return SDL_SemWait(sem);
+	}
+
+	tv.tv_sec = ms / TB_MSPERSEC;
+	tv.tv_nsec = (ms % TB_MSPERSEC) * TB_NSPERMS;
+
+	retval = LWP_SemTimedWait(sem->sem, &tv);
+	switch ( retval ) {
+	    case ETIMEDOUT:
+		retval = SDL_MUTEX_TIMEDOUT;
+		break;
+	    case 0:
+		break;
+	    default:
+		SDL_SetError("LWP_SemTimedWait() failed");
+		retval = -1;
+		break;
+	}
+	return retval;
+}
+
+/* Returns the current count of the semaphore */
 Uint32 SDL_SemValue(SDL_sem *sem)
 {
 	Uint32 value;
 
 	value = 0;
-	if (sem)
-	{
-		SDL_LockMutex(sem->count_lock);
-		value = sem->count;
-		SDL_UnlockMutex(sem->count_lock);
+	if ( sem ) {
+		LWP_SemGetValue(sem->sem, &value);
 	}
 	return value;
 }
 
+/* Atomically increases the semaphore's count (not blocking) */
 int SDL_SemPost(SDL_sem *sem)
 {
-	if (!sem)
-	{
+	int retval;
+
+	if ( ! sem ) {
 		SDL_SetError("Passed a NULL semaphore");
 		return -1;
 	}
 
-	SDL_LockMutex(sem->count_lock);
-	if (sem->waiters_count > 0)
-	{
-		SDL_CondSignal(sem->count_nonzero);
+	retval = 0;
+	if ( LWP_SemPost(sem->sem) != 0 ) {
+		SDL_SetError("LWP_SemPost() failed");
+		retval = -1;
 	}
-	++sem->count;
-	SDL_UnlockMutex(sem->count_lock);
-
-	return 0;
+	return retval;
 }

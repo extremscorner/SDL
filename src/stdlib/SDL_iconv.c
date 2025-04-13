@@ -33,7 +33,8 @@
    If we get this wrong, it's just a warning, so no big deal.
 */
 #if defined(_XGP6) || \
-    defined(__GLIBC__) && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2))
+    (defined(__GLIBC__) && ((__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 2)) || \
+    (defined(_NEWLIB_VERSION)))
 #define ICONV_INBUF_NONCONST
 #endif
 
