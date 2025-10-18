@@ -1082,13 +1082,13 @@ static void _HandleGCJoystickUpdate(SDL_Joystick *joystick)
 
     axis = PAD_TriggerL(index);
     if (prev_state->gamecube.triggerL != axis) {
-        SDL_PrivateJoystickAxis(joystick, 4, axis << 7);
+        SDL_PrivateJoystickAxis(joystick, 4, (axis * 257) - 32768);
         prev_state->gamecube.triggerL = axis;
     }
 
     axis = PAD_TriggerR(index);
     if (prev_state->gamecube.triggerR != axis) {
-        SDL_PrivateJoystickAxis(joystick, 5, axis << 7);
+        SDL_PrivateJoystickAxis(joystick, 5, (axis * 257) - 32768);
         prev_state->gamecube.triggerR = axis;
     }
 }
